@@ -1,7 +1,9 @@
-// components/FormWithButton.js
-"use client";
+
+"use client"
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const FormWithButton = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,14 +15,16 @@ const FormWithButton = () => {
   });
   const [tableData, setTableData] = useState([]);
   const [isUpdate, setIsUpdate] = useState(false);
-  const [updateId,setUpdateId] = useState();
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [errors, setErrors] = useState({});
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
-      const response = await axios.get("http://localhost:3000/api/form"); 
+      const response = await axios.get("http://localhost:8000/api/form");
       setTableData(response.data);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -30,6 +34,15 @@ const FormWithButton = () => {
   const togglePopup = () => {
     setIsOpen(!isOpen);
     setIsUpdate(false);
+    setSelectedRows([]);
+    setErrors({});
+  };
+
+  const handleUpdate = (id) => {
+    const selectedItem = tableData.find((item) => item._id === id);
+    setFormData(selectedItem);
+    setIsOpen(true);
+    setIsUpdate(true);
   };
 
   const handleChange = (e) => {
@@ -37,26 +50,26 @@ const FormWithButton = () => {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleUpdate = (id) => {
-    const data = tableData.find((t) => t._id === id);
-    console.log(data);
-    setUpdateId(data._id)
-    setFormData({
-      name: data.name,
-      phoneNumber: data.phoneNumber,
-      email: data.email,
-      hobbies: data.hobbies,
-    });
-    togglePopup();
-    setIsUpdate(true);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const validationErrors = validateForm(formData);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
     try {
-      isUpdate === true
-        ? await axios.put(`http://localhost:3000/api/form/${updateId}`, formData)
-        : await axios.post("http://localhost:3000/api/form", formData); // Replace 'http://localhost:3000/api/form' with your backend API endpoint
+      if (isUpdate) {
+        await axios.put(
+          `http://localhost:8000/api/form/${formData._id}`,
+          formData
+        );
+        toast.success("Data updated successfully!");
+      } else {
+        await axios.post("http://localhost:8000/api/form", formData);
+        toast.success("Data added successfully!");
+      }
       setFormData({
         name: "",
         phoneNumber: "",
@@ -64,18 +77,70 @@ const FormWithButton = () => {
         hobbies: "",
       });
       togglePopup();
-      fetchData(); // Fetch updated data after submission
+      fetchData();
     } catch (error) {
-      console.error("Error posting data:", error);
+      console.error("Error:", error);
+      toast.error("Error:", error);
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:3000/api/form/${id}`); // Replace 'http://localhost:3000/api/form' with your backend API endpoint
-      fetchData(); // Fetch updated data after deletion
+      await axios.delete(`http://localhost:8000/api/form/${id}`);
+      fetchData();
+      toast.success("Data deleted successfully!");
     } catch (error) {
       console.error("Error deleting data:", error);
+      toast.error("Error deleting data:", error);
+    }
+  };
+
+  const handleCheckboxChange = (id) => {
+    const index = selectedRows.indexOf(id);
+    if (index === -1) {
+      setSelectedRows([...selectedRows, id]);
+    } else {
+      setSelectedRows(selectedRows.filter((rowId) => rowId !== id));
+    }
+  };
+
+  const validateForm = (formData) => {
+    let errors = {};
+    if (!formData.name.trim() || formData.name.trim().length < 3) {
+      errors.name = "Name is required and must be at least 3 characters";
+    }
+    if (!formData.hobbies.trim() || formData.hobbies.trim().length < 3) {
+      errors.hobbies = "Hobbies are required and must be at least 3 characters";
+    }
+    if (!formData.phoneNumber.trim()) {
+      errors.phoneNumber = "Phone number is required";
+    } else if (!/^\d{10}$/.test(formData.phoneNumber)) {
+      errors.phoneNumber = "Invalid phone number";
+    }
+    if (!formData.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      errors.email = "Invalid email address";
+    }
+    return errors;
+  };
+
+  const sendEmail = async () => {
+    const selectedRowData = tableData.filter((item) =>
+      selectedRows.includes(item._id)
+    );
+  
+    try {
+      await axios.post("http://localhost:8000/send-email", {
+        to: "info@redpositive.in",
+        subject: "Selected Row Data",
+        body: JSON.stringify(selectedRowData),
+      });
+  
+      toast.success("Email sent successfully!");
+    } catch (error) {
+      console.error("Error sending email request:", error);
+      toast.error("Error sending email:", error);
     }
   };
 
@@ -89,7 +154,7 @@ const FormWithButton = () => {
         onClick={togglePopup}
         className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mb-4"
       >
-        Open Form
+        Add
       </button>
       {isOpen && (
         <div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50">
@@ -100,7 +165,7 @@ const FormWithButton = () => {
             >
               &times;
             </button>
-            <h2 className="text-xl mb-4">Form</h2>
+            <h2 className="text-xl mb-4">{isUpdate ? "Update Data" : "Form"}</h2>
             <form onSubmit={handleSubmit}>
               <div className="mb-4">
                 <label
@@ -115,9 +180,10 @@ const FormWithButton = () => {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="mt-1 p-2 border rounded-md w-full"
+                  className={`mt-1 p-2 border rounded-md w-full ${errors.name && 'border-red-500'}`}
                   required
                 />
+                {errors.name && <p className="text-red-500 text-sm">{errors.name}</p>}
               </div>
               <div className="mb-4">
                 <label
@@ -132,9 +198,10 @@ const FormWithButton = () => {
                   name="phoneNumber"
                   value={formData.phoneNumber}
                   onChange={handleChange}
-                  className="mt-1 p-2 border rounded-md w-full"
+                  className={`mt-1 p-2 border rounded-md w-full ${errors.phoneNumber && 'border-red-500'}`}
                   required
                 />
+                {errors.phoneNumber && <p className="text-red-500 text-sm">{errors.phoneNumber}</p>}
               </div>
               <div className="mb-4">
                 <label
@@ -149,9 +216,10 @@ const FormWithButton = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="mt-1 p-2 border rounded-md w-full"
+                  className={`mt-1 p-2 border rounded-md w-full ${errors.email && 'border-red-500'}`}
                   required
                 />
+                {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
               </div>
               <div className="mb-4">
                 <label
@@ -166,9 +234,10 @@ const FormWithButton = () => {
                   name="hobbies"
                   value={formData.hobbies}
                   onChange={handleChange}
-                  className="mt-1 p-2 border rounded-md w-full"
+                  className={`mt-1 p-2 border rounded-md w-full ${errors.hobbies && 'border-red-500'}`}
                   required
                 />
+                {errors.hobbies && <p className="text-red-500 text-sm">{errors.hobbies}</p>}
               </div>
               <div className="flex justify-end">
                 <button
@@ -182,7 +251,7 @@ const FormWithButton = () => {
                   type="submit"
                   className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
                 >
-                  Submit
+                  {isUpdate ? "Update Data" : "Submit"}
                 </button>
               </div>
             </form>
@@ -190,7 +259,7 @@ const FormWithButton = () => {
         </div>
       )}
       <section className="w-full">
-        <table className="w-full border-collapse border border-gray-200 mb-8">
+        <table className="w-full border-collapse border border-gray-200 mb-8 text-center">
           <thead className="bg-gray-100">
             <tr>
               <th className="border border-gray-200 px-4 py-2">Select</th>
@@ -206,7 +275,11 @@ const FormWithButton = () => {
             {tableData.map((item, index) => (
               <tr key={item._id}>
                 <td className="border border-gray-200 px-4 py-2">
-                  <input type="checkbox" />
+                  <input
+                    type="checkbox"
+                    onChange={() => handleCheckboxChange(item._id)}
+                    checked={selectedRows.includes(item._id)}
+                  />
                 </td>
                 <td className="border border-gray-200 px-4 py-2">{index}</td>
                 <td className="border border-gray-200 px-4 py-2">
@@ -239,7 +312,16 @@ const FormWithButton = () => {
             ))}
           </tbody>
         </table>
+        <div className="flex items-center justify-center">
+          <button
+            onClick={sendEmail}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+          >
+            Send Email
+          </button>
+        </div>
       </section>
+      <ToastContainer />
     </div>
   );
 };
