@@ -24,7 +24,7 @@ const FormWithButton = () => {
 
   const fetchData = async () => {
     try {
-      const response = await axios.get("https://curds-backend-2.onrender.com/api/form");
+      const response = await axios.get("http://localhost:8000/api/form");
       setTableData(response.data);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -62,12 +62,12 @@ const FormWithButton = () => {
     try {
       if (isUpdate) {
         await axios.put(
-          `https://curds-backend-2.onrender.com/api/form/${formData._id}`,
+          `http://localhost:8000/api/form/${formData._id}`,
           formData
         );
         toast.success("Data updated successfully!");
       } else {
-        await axios.post("https://curds-backend-2.onrender.com/api/form", formData);
+        await axios.post("http://localhost:8000/api/form", formData);
         toast.success("Data added successfully!");
       }
       setFormData({
@@ -86,7 +86,7 @@ const FormWithButton = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`https://curds-backend-2.onrender.com/api/form/${id}`);
+      await axios.delete(`http://localhost:8000/api/form/${id}`);
       fetchData();
       toast.success("Data deleted successfully!");
     } catch (error) {
@@ -131,7 +131,7 @@ const FormWithButton = () => {
     );
   
     try {
-      await axios.post("https://curds-backend-2.onrender.com/send-email", {
+      await axios.post("http://localhost:8000/send-email", {
         to: "info@redpositive.in",
         subject: "Selected Row Data",
         body: JSON.stringify(selectedRowData),
